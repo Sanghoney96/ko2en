@@ -14,9 +14,8 @@ class PositionalEncoding(nn.Module):
         i = torch.arange(d_model).reshape(1, -1)  # (1, d_model)
 
         # Set an angle on each (pos, 2i)
-        angle_rads = pos / torch.pow(
-            10000, (2 * (i // 2)) / d_model
-        )  # (input_len, d_model)
+        # shape : (input_len, d_model)
+        angle_rads = pos / torch.pow(10000, (2 * (i // 2)) / d_model)
 
         angle_rads[:, 0::2] = torch.sin(angle_rads[:, 0::2])
         angle_rads[:, 1::2] = torch.cos(angle_rads[:, 1::2])
@@ -81,9 +80,8 @@ class MultiHeadAttention(nn.Module):
         K = self.split_heads(K)
         V = self.split_heads(V)
 
-        heads = self.scaled_dot_product_attention(
-            Q, K, V
-        )  # (batch_size, n_heads, input_len, d_k)
+        # (batch_size, n_heads, input_len, d_k)
+        heads = self.scaled_dot_product_attention(Q, K, V)
 
         concat = self.concat_heads(heads)  # (batch_size, input_len, d_model)
         out = self.W_o(concat)  # (batch_size, input_len, d_model)
@@ -91,22 +89,55 @@ class MultiHeadAttention(nn.Module):
         return out
 
 
-# if __name__ == "__main__":
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#     batch_size = 64
-#     input_len = 40
-#     d_model = 128
-#     n_heads = 8
+class FeedForwardNet(nn.Module):
+    def __init__(self, d_model, d_ff, dropout=0.0):
+        super().__init__()
+        self.linear_1 = nn.Linear(d_model, d_ff)
+        self.relu = nn.ReLU()
+        self.linear_2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(dropout)
 
-#     # 임의의 입력 텐서
-#     x = torch.rand((batch_size, input_len, d_model)).to(device)
+    def forward(self, x):
+        x = self.linear_1(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        out = self.linear_2(x)
 
-#     # 위치 인코딩 추가
-#     pos_encoding = PositionalEncoding(input_len, d_model).to(device)
-#     x = pos_encoding(x)
-#     print("After Positional Encoding:", x.shape)
+        return out
 
-#     # Multi-Head Attention 추가
-#     mha = MultiHeadAttention(n_heads, d_model).to(device)
-#     output = mha(x)
-#     print("After Multi-Head Attention:", output.shape)
+
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    batch_size = 64
+    input_len = 40
+    d_model = 128
+    d_ff = 512
+    n_heads = 8
+    dropout = 0.5
+
+    x = torch.rand((batch_size, input_len, d_model)).to(device)
+
+    # Positional Encoding
+    pos_encoding = PositionalEncoding(input_len, d_model).to(device)
+    x = pos_encoding(x)
+    print("After Positional Encoding:", x.shape)
+
+    # Multi-Head Attention
+    mha = MultiHeadAttention(n_heads, d_model).to(device)
+    attn_out = mha(x)
+    print("After Multi-Head Attention:", attn_out.shape)
+
+    # 🔹 Residual + LayerNorm
+    norm1 = nn.LayerNorm(d_model).to(device)
+    x = norm1(x + attn_out)
+    print("After Residual + LayerNorm (MHA):", x.shape)
+
+    # FeedForward Network
+    ffn = FeedForwardNet(d_model, d_ff, dropout).to(device)
+    ff_out = ffn(x)
+    print("After FeedForward Network:", ff_out.shape)
+
+    # 🔹 Residual + LayerNorm
+    norm2 = nn.LayerNorm(d_model).to(device)
+    x = norm2(x + ff_out)
+    print("After Residual + LayerNorm (FFN):", x.shape)
