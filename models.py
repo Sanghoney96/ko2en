@@ -32,7 +32,7 @@ class PositionalEncoding(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, d_model):
+    def __init__(self, n_heads, d_model, dropout):
         super().__init__()
         self.n_heads = n_heads
         self.d_model = d_model
@@ -43,6 +43,7 @@ class MultiHeadAttention(nn.Module):
         self.W_v = nn.Linear(self.d_model, self.d_model, bias=False)
         self.W_o = nn.Linear(self.d_model, self.d_model, bias=False)
         self.softmax = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(dropout)
 
     def split_heads(self, x):
         """
@@ -85,6 +86,7 @@ class MultiHeadAttention(nn.Module):
 
         concat = self.concat_heads(heads)  # (batch_size, input_len, d_model)
         out = self.W_o(concat)  # (batch_size, input_len, d_model)
+        out = self.dropout(out)
 
         return out
 
@@ -101,7 +103,8 @@ class FeedForwardNet(nn.Module):
         x = self.linear_1(x)
         x = self.relu(x)
         x = self.dropout(x)
-        out = self.linear_2(x)
+        x = self.linear_2(x)
+        out = self.dropout(x)
 
         return out
 
@@ -123,7 +126,7 @@ if __name__ == "__main__":
     print("After Positional Encoding:", x.shape)
 
     # Multi-Head Attention
-    mha = MultiHeadAttention(n_heads, d_model).to(device)
+    mha = MultiHeadAttention(n_heads, d_model, dropout).to(device)
     attn_out = mha(x)
     print("After Multi-Head Attention:", attn_out.shape)
 
