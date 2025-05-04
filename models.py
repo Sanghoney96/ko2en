@@ -90,7 +90,11 @@ class MultiHeadAttention(nn.Module):
         causality_mask = get_causality_mask(seq_len) if self.is_causal else None
 
         # Generate padding mask if required
-        padding_mask = get_padding_mask(key, pad_token_id=pad_token_id) if self.is_padding else None
+        padding_mask = (
+            get_padding_mask(key, pad_token_id=pad_token_id)
+            if self.is_padding
+            else None
+        )
 
         Q = self.W_q(query)
         K = self.W_k(key)
