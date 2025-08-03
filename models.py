@@ -1,172 +1,93 @@
-import math
-import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from utils import get_causality_mask, get_padding_mask
+from layers import PositionalEncoding
+from blocks import Encoder, Decoder
+from utils import get_padding_mask
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, input_len, d_model):
+class Transformer(nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        src_len,
+        tgt_len,
+        d_model,
+        d_ff,
+        n_heads,
+        num_encoder_layers,
+        num_decoder_layers,
+        dropout=0.1,
+    ):
         super().__init__()
+        # 임베딩 & 포지셔널 인코딩
+        self.src_embedding = nn.Embedding(vocab_size, d_model)
+        self.tgt_embedding = nn.Embedding(vocab_size, d_model)
 
-        pos = torch.arange(input_len).reshape(-1, 1)  # (input_len, 1)
-        i = torch.arange(d_model).reshape(1, -1)  # (1, d_model)
+        self.src_pos_encoding = PositionalEncoding(src_len, d_model)
+        self.tgt_pos_encoding = PositionalEncoding(tgt_len, d_model)
 
-        # Set an angle on each (pos, 2i)
-        # shape : (input_len, d_model)
-        angle_rads = pos / torch.pow(10000, (2 * (i // 2)) / d_model)
-
-        angle_rads[:, 0::2] = torch.sin(angle_rads[:, 0::2])
-        angle_rads[:, 1::2] = torch.cos(angle_rads[:, 1::2])
-
-        # Set angle_rads as non-trainable,
-        # then ensure pos_encoding is on the same device as input tensor.
-        self.register_buffer("pos_encoding", angle_rads)
-        # self.pos_encoding = self.pos_encoding.to(device)
-
-    def forward(self, x):
-        x = x + self.pos_encoding.unsqueeze(0)
-
-        return x
-
-
-class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, d_model, dropout, is_causal=False, is_padding=False):
-        super().__init__()
-        self.n_heads = n_heads
-        self.d_model = d_model
-        self.d_k = d_model // n_heads
-
-        self.W_q = nn.Linear(self.d_model, self.d_model, bias=False)
-        self.W_k = nn.Linear(self.d_model, self.d_model, bias=False)
-        self.W_v = nn.Linear(self.d_model, self.d_model, bias=False)
-        self.W_o = nn.Linear(self.d_model, self.d_model, bias=False)
         self.dropout = nn.Dropout(dropout)
 
-    def split_heads(self, x):
-        """
-        (batch_size, input_len, d_model) -> (batch_size, n_heads, input_len, d_k)
-        """
-        batch_size, input_len = x.shape[0], x.shape[1]
-        x_split = x.reshape(batch_size, input_len, self.n_heads, self.d_k)
-        x_split = x_split.permute(0, 2, 1, 3)
-
-        return x_split
-
-    def scaled_dot_product_attention(
-        self, q, k, v, causality_mask=None, padding_mask=None
-    ):
-        k = k.transpose(2, 3)
-        scores = torch.matmul(q, k) / math.sqrt(self.d_k)
-
-        # Apply causality mask if provided (to prevent attending to future positions)
-        if causality_mask is not None:
-            scores = scores + causality_mask
-
-        # Apply padding mask if provided (to prevent attending to padding tokens)
-        if padding_mask is not None:
-            scores = scores + padding_mask
-
-        attn_map = F.softmax(scores, dim=-1)
-        out = torch.matmul(attn_map, v)
-
-        return out
-
-    def concat_heads(self, x):
-        """
-        (batch_size, n_heads, input_len, d_k) -> (batch_size, input_len, d_model)
-        """
-        batch_size, n_heads, input_len, d_k = x.size()
-        x = x.permute(0, 2, 1, 3)  # (batch_size, input_len, n_heads, d_k)
-        x = x.reshape(batch_size, input_len, n_heads * d_k)
-        return x
-
-    def forward(self, query, key, value, pad_token_id=0):
-        batch_size, seq_len = query.size(0), query.size(1)
-
-        # Generate causality mask if required
-        causality_mask = get_causality_mask(seq_len) if self.is_causal else None
-
-        # Generate padding mask if required
-        padding_mask = (
-            get_padding_mask(key, pad_token_id=pad_token_id)
-            if self.is_padding
-            else None
+        # 인코더 스택
+        self.encoder_layers = nn.ModuleList(
+            [
+                Encoder(d_model, d_ff, n_heads, dropout)
+                for _ in range(num_encoder_layers)
+            ]
         )
 
-        Q = self.W_q(query)
-        K = self.W_k(key)
-        V = self.W_v(value)
+        # 디코더 스택
+        self.decoder_layers = nn.ModuleList(
+            [
+                Decoder(d_model, d_ff, n_heads, dropout)
+                for _ in range(num_decoder_layers)
+            ]
+        )
 
-        Q = self.split_heads(Q)
-        K = self.split_heads(K)
-        V = self.split_heads(V)
+        # 출력 projection
+        self.out_proj = nn.Linear(d_model, vocab_size)
 
-        # (batch_size, n_heads, input_len, d_k)
-        heads = self.scaled_dot_product_attention(Q, K, V, causality_mask, padding_mask)
+    def forward(self, src_input_ids, tgt_input_ids):
+        # 인코더 입력 마스크
+        src_padding_mask = get_padding_mask(src_input_ids, pad_token_id=0)
+        tgt_padding_mask = get_padding_mask(tgt_input_ids, pad_token_id=0)
 
-        concat = self.concat_heads(heads)  # (batch_size, input_len, d_model)
-        out = self.W_o(concat)  # (batch_size, input_len, d_model)
-        out = self.dropout(out)
+        # 인코더 입력 처리
+        enc_x = self.src_embedding(src_input_ids)
+        enc_x = self.src_pos_encoding(enc_x)
+        enc_x = self.dropout(enc_x)
 
-        return out
+        for layer in self.encoder_layers:
+            enc_x = layer(enc_x, src_padding_mask)
 
+        # 디코더 입력 처리
+        dec_x = self.tgt_embedding(tgt_input_ids)
+        dec_x = self.tgt_pos_encoding(dec_x)
+        dec_x = self.dropout(dec_x)
 
-class FeedForwardNet(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.0):
-        super().__init__()
-        self.linear_1 = nn.Linear(d_model, d_ff)
-        self.relu = nn.ReLU()
-        self.linear_2 = nn.Linear(d_ff, d_model)
-        self.dropout = nn.Dropout(dropout)
+        for layer in self.decoder_layers:
+            dec_x = layer(dec_x, enc_x, tgt_padding_mask, src_padding_mask)
 
-    def forward(self, x):
-        x = self.linear_1(x)
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.linear_2(x)
-        out = self.dropout(x)
-
-        return out
+        # 최종 출력
+        logits = self.out_proj(dec_x)  # (B, T, vocab_size)
+        return logits
 
 
 if __name__ == "__main__":
-    batch_size = 64
-    input_len = 40
-    d_model = 128
-    d_ff = 512
-    n_heads = 8
-    dropout = 0.5
+    model = Transformer(
+        vocab_size=10000,
+        src_len=50,  # 인코더 입력 길이
+        tgt_len=40,  # 디코더 입력 길이
+        d_model=128,
+        d_ff=512,
+        n_heads=8,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dropout=0.3,
+    )
 
-    x = torch.rand((batch_size, input_len, d_model))
+    src_input_ids = torch.randint(0, 10000, (64, 50))
+    tgt_input_ids = torch.randint(0, 10000, (64, 40))
 
-    # Positional Encoding
-    pos_encoding = PositionalEncoding(input_len, d_model)
-    x = pos_encoding(x)
-    print("After Positional Encoding:", x.shape)
-
-    # 패딩 마스크 생성 (예시로 일부 토큰을 패딩으로 가정)
-    padding_mask = get_padding_mask(x, pad_token_id=0)
-    print("Padding Mask:", padding_mask.shape)
-
-    # Multi-Head Attention
-    mha = MultiHeadAttention(n_heads, d_model, dropout)
-    attn_out = mha(x, x, x, padding_mask)
-    print("After Multi-Head Attention:", attn_out.shape)
-
-    # 🔹 Residual + LayerNorm
-    norm1 = nn.LayerNorm(d_model)
-    x = norm1(x + attn_out)
-    print("After Residual + LayerNorm (MHA):", x.shape)
-
-    # FeedForward Network
-    ffn = FeedForwardNet(d_model, d_ff, dropout)
-    ff_out = ffn(x)
-    print("After FeedForward Network:", ff_out.shape)
-
-    # 🔹 Residual + LayerNorm
-    norm2 = nn.LayerNorm(d_model)
-    x = norm2(x + ff_out)
-    print("After Residual + LayerNorm (FFN):", x.shape)
+    logits = model(src_input_ids, tgt_input_ids)
+    print(logits.shape)  # (64, 40, 10000)
