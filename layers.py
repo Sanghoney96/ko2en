@@ -1,10 +1,8 @@
 import math
-import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import get_causality_mask, get_padding_mask
+from utils import get_causality_mask
 
 
 class PositionalEncoding(nn.Module):
@@ -33,7 +31,7 @@ class PositionalEncoding(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, d_model, dropout, is_causal=False, is_padding=False):
+    def __init__(self, n_heads, d_model, dropout, is_causal=False):
         super().__init__()
         self.n_heads = n_heads
         self.d_model = d_model
@@ -46,7 +44,6 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         self.is_causal = is_causal
-        self.is_padding = is_padding
 
     def split_heads(self, x):
         """
@@ -90,7 +87,14 @@ class MultiHeadAttention(nn.Module):
         batch_size, seq_len = query.size(0), query.size(1)
 
         # Generate causality mask if required
-        causality_mask = get_causality_mask(seq_len) if self.is_causal else None
+        if self.is_causal:
+            causality_mask = get_causality_mask(seq_len)
+            causality_mask = causality_mask.to(query.device).type_as(query)
+            causality_mask = causality_mask.unsqueeze(0).unsqueeze(
+                0
+            )  # (1, 1, seq, seq)
+        else:
+            causality_mask = None
 
         Q = self.W_q(query)
         K = self.W_k(key)
@@ -116,13 +120,14 @@ class FeedForwardNet(nn.Module):
         self.linear_1 = nn.Linear(d_model, d_ff)
         self.relu = nn.ReLU()
         self.linear_2 = nn.Linear(d_ff, d_model)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout_1 = nn.Dropout(dropout)
+        self.dropout_2 = nn.Dropout(dropout)
 
     def forward(self, x):
         x = self.linear_1(x)
         x = self.relu(x)
-        x = self.dropout(x)
+        x = self.dropout_1(x)
         x = self.linear_2(x)
-        out = self.dropout(x)
+        out = self.dropout_2(x)
 
         return out

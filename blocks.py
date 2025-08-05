@@ -1,7 +1,4 @@
-import torch
 import torch.nn as nn
-from utils import get_causality_mask, get_padding_mask
-
 from layers import *
 
 
@@ -14,8 +11,7 @@ class Encoder(nn.Module):
             n_heads=n_heads,
             d_model=d_model,
             dropout=dropout,
-            is_causal=False,
-            is_padding=True,
+            is_causal=False
         )
         self.ffn = FeedForwardNet(d_model, d_ff, dropout)
 
@@ -43,15 +39,13 @@ class Decoder(nn.Module):
             n_heads=n_heads,
             d_model=d_model,
             dropout=dropout,
-            is_causal=True,
-            is_padding=True,
+            is_causal=True
         )
         self.cross_attn = MultiHeadAttention(
             n_heads=n_heads,
             d_model=d_model,
             dropout=dropout,
-            is_causal=False,
-            is_padding=True,
+            is_causal=False
         )
         self.ffn = FeedForwardNet(d_model, d_ff, dropout)
 
