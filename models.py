@@ -8,7 +8,8 @@ from utils import get_padding_mask
 class Transformer(nn.Module):
     def __init__(
         self,
-        vocab_size,
+        src_vocab_size,
+        tgt_vocab_size,
         src_len,
         tgt_len,
         d_model,
@@ -20,13 +21,14 @@ class Transformer(nn.Module):
     ):
         super().__init__()
         # 임베딩 & 포지셔널 인코딩
-        self.src_embedding = nn.Embedding(vocab_size, d_model)
-        self.tgt_embedding = nn.Embedding(vocab_size, d_model)
+        self.src_embedding = nn.Embedding(src_vocab_size, d_model)
+        self.tgt_embedding = nn.Embedding(tgt_vocab_size, d_model)
 
         self.src_pos_encoding = PositionalEncoding(src_len, d_model)
         self.tgt_pos_encoding = PositionalEncoding(tgt_len, d_model)
 
         self.dropout = nn.Dropout(dropout)
+        self.norm = nn.LayerNorm(d_model)
 
         # 인코더 스택
         self.encoder_layers = nn.ModuleList(
@@ -45,7 +47,7 @@ class Transformer(nn.Module):
         )
 
         # 출력 projection
-        self.out_proj = nn.Linear(d_model, vocab_size)
+        self.out_proj = nn.Linear(d_model, tgt_vocab_size)
 
     def forward(self, src_input_ids, tgt_input_ids):
         # 인코더 입력 마스크
@@ -59,6 +61,8 @@ class Transformer(nn.Module):
 
         for layer in self.encoder_layers:
             enc_x = layer(enc_x, src_padding_mask)
+        
+        enc_x = self.norm(enc_x)
 
         # 디코더 입력 처리
         dec_x = self.tgt_embedding(tgt_input_ids)
@@ -75,9 +79,10 @@ class Transformer(nn.Module):
 
 if __name__ == "__main__":
     model = Transformer(
-        vocab_size=10000,
-        src_len=50,  # 인코더 입력 길이
-        tgt_len=40,  # 디코더 입력 길이
+        src_vocab_size=30000,
+        tgt_vocab_size=27000,
+        src_len=55,  # 인코더 입력 길이
+        tgt_len=55,  # 디코더 입력 길이
         d_model=128,
         d_ff=512,
         n_heads=8,
@@ -86,8 +91,8 @@ if __name__ == "__main__":
         dropout=0.3,
     )
 
-    src_input_ids = torch.randint(0, 10000, (64, 50))
-    tgt_input_ids = torch.randint(0, 10000, (64, 40))
+    src_input_ids = torch.randint(0, 30000, (64, 55))
+    tgt_input_ids = torch.randint(0, 27000, (64, 55))
 
     logits = model(src_input_ids, tgt_input_ids)
     print(logits.shape)  # (64, 40, 10000)
