@@ -1,8 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-from layers import PositionalEncoding
-from blocks import Encoder, Decoder
+from models.layers import PositionalEncoding
+from models.blocks import Encoder, Decoder
 from utils import get_padding_mask
 
 

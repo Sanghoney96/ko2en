@@ -1,5 +1,5 @@
 import torch.nn as nn
-from layers import *
+from models.layers import *
 
 
 class Encoder(nn.Module):
@@ -8,10 +8,7 @@ class Encoder(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.self_attn = MultiHeadAttention(
-            n_heads=n_heads,
-            d_model=d_model,
-            dropout=dropout,
-            is_causal=False
+            n_heads=n_heads, d_model=d_model, dropout=dropout, is_causal=False
         )
         self.ffn = FeedForwardNet(d_model, d_ff, dropout)
 
@@ -36,16 +33,10 @@ class Decoder(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
         self.masked_self_attn = MultiHeadAttention(
-            n_heads=n_heads,
-            d_model=d_model,
-            dropout=dropout,
-            is_causal=True
+            n_heads=n_heads, d_model=d_model, dropout=dropout, is_causal=True
         )
         self.cross_attn = MultiHeadAttention(
-            n_heads=n_heads,
-            d_model=d_model,
-            dropout=dropout,
-            is_causal=False
+            n_heads=n_heads, d_model=d_model, dropout=dropout, is_causal=False
         )
         self.ffn = FeedForwardNet(d_model, d_ff, dropout)
 
