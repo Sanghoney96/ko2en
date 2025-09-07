@@ -1,9 +1,13 @@
+import sys, os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import math
 import torch
 import torch.nn as nn
 from models.layers import PositionalEncoding
 from models.blocks import Encoder, Decoder
-from utils import get_padding_mask
+from models.mask_fn import get_padding_mask
 
 
 class Transformer(nn.Module):
@@ -93,8 +97,8 @@ if __name__ == "__main__":
     model = Transformer(
         src_vocab_size=30000,
         tgt_vocab_size=27000,
-        src_len=55,  # 인코더 입력 길이
-        tgt_len=55,  # 디코더 입력 길이
+        src_len=60,  # 인코더 입력 길이
+        tgt_len=60,  # 디코더 입력 길이
         d_model=128,
         d_ff=512,
         n_heads=8,
@@ -104,8 +108,8 @@ if __name__ == "__main__":
     ).to(device)
 
     # 입력 텐서도 동일한 디바이스로 이동
-    src_input_ids = torch.randint(0, 30000, (64, 55)).to(device)
-    tgt_input_ids = torch.randint(0, 27000, (64, 55)).to(device)
+    src_input_ids = torch.randint(0, 30000, (64, 40)).to(device)
+    tgt_input_ids = torch.randint(0, 27000, (64, 40)).to(device)
 
     # 모델 실행
     logits = model(src_input_ids, tgt_input_ids)

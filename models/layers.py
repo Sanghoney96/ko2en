@@ -2,15 +2,15 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import get_causality_mask
+from models.mask_fn import get_causality_mask
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, input_len, d_model):
+    def __init__(self, max_len, d_model):
         super().__init__()
 
-        pos = torch.arange(input_len).reshape(-1, 1)  # (input_len, 1)
-        i = torch.arange(d_model).reshape(1, -1)  # (1, d_model)
+        pos = torch.arange(max_len, dtype=torch.float32).reshape(-1, 1)  # (max_len, 1)
+        i = torch.arange(d_model, dtype=torch.float32).reshape(1, -1)  # (1, d_model)
 
         # Set an angle on each (pos, 2i)
         # shape : (input_len, d_model)
@@ -21,11 +21,12 @@ class PositionalEncoding(nn.Module):
 
         # Set angle_rads as non-trainable,
         # then ensure pos_encoding is on the same device as input tensor.
-        self.register_buffer("pos_encoding", angle_rads)
-        # self.pos_encoding = self.pos_encoding.to(device)
+        pos_encoding = angle_rads.unsqueeze(0)
+        self.register_buffer("pos_encoding", pos_encoding)
 
     def forward(self, x):
-        x = x + self.pos_encoding.unsqueeze(0)
+        seq_len = x.size(1)
+        x = x + self.pos_encoding[:, :seq_len]
 
         return x
 
