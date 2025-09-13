@@ -1,10 +1,10 @@
 import torch
-import torch.nn as nn
+import torch.nn.functional as F
 
 
 def loss_function(logits, targets):
     """
     logits: (batch_size, seq_len, vocab_size), targets: (batch_size, seq_len)
     """
-    loss_fn = nn.CrossEntropyLoss(ignore_index=0, reduction="mean")
-    return loss_fn(logits.permute(0, 2, 1), targets)
+    loss_fn = F.cross_entropy(logits, targets, ignore_index=0, reduction="mean")
+    return loss_fn
