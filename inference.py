@@ -2,6 +2,10 @@ import pandas as pd
 import nltk.translate.bleu_score as bleu
 
 
+def translate():
+    return
+
+
 def get_bleu_score(predictions, targets):
     """
     원문을 번역한 문장(predictions)과 번역문(targets)의 pandas dataframe을 입력하여 전체 test set에 대한 bleu score 계산
@@ -17,3 +21,7 @@ def get_bleu_score(predictions, targets):
     bleu_scores = bleu.corpus_bleu(targets, predictions)
 
     return bleu_scores
+
+
+def beam_search():
+    return
