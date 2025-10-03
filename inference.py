@@ -1,8 +1,26 @@
 import pandas as pd
 import nltk.translate.bleu_score as bleu
+from utils import preprocess_text
+from transformers import AutoTokenizer
+import torch
 
 
-def translate():
+def translate(src_sentence, max_len, model, device):
+    """
+    원문 -> 전처리 -> 토큰화 -> 모델 추론 -> 디코딩
+    """
+    src_text = preprocess_text(src_sentence, lang="ko")
+
+    src_tokenizer = AutoTokenizer.from_pretrained("klue/bert-base")
+    tgt_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+    src_ids = src_tokenizer(
+        src_text, truncation=True, max_length=max_len, add_special_tokens=True
+    )
+    src_ids = torch.tensor(src_ids["input_ids"], dtype=torch.long)
+
+    model.eval()
+
     return
 
 
