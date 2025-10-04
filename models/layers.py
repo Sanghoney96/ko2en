@@ -64,7 +64,7 @@ class MultiHeadAttention(nn.Module):
 
         # Apply causality mask if provided (to prevent attending to future positions)
         if causality_mask is not None:
-            scores = scores + causality_mask
+            scores = scores.masked_fill(causality_mask == 0, -1e4)
 
         # Apply padding mask if provided (to prevent attending to padding tokens)
         if padding_mask is not None:
@@ -85,15 +85,13 @@ class MultiHeadAttention(nn.Module):
         return x
 
     def forward(self, query, key, value, padding_mask=None):
-        batch_size, seq_len = query.size(0), query.size(1)
+        seq_len = query.size(1)
 
         # Generate causality mask if required
         if self.is_causal:
-            causality_mask = get_causality_mask(seq_len)
-            causality_mask = causality_mask.to(query.device).type_as(query)
-            causality_mask = causality_mask.unsqueeze(0).unsqueeze(
-                0
-            )  # (1, 1, seq, seq)
+            causality_mask = get_causality_mask(seq_len, device=query.device).type_as(
+                query
+            )
         else:
             causality_mask = None
 

@@ -59,6 +59,43 @@ class Transformer(nn.Module):
         # 출력 projection
         self.out_proj = nn.Linear(d_model, tgt_vocab_size)
 
+    # def encode(self, src_input_ids):
+    #     src_padding_mask = get_padding_mask(src_input_ids, pad_token_id=0)
+
+    #     # 인코더 입력 처리
+    #     enc_x = self.src_embedding(src_input_ids) * math.sqrt(self.d_model)
+    #     enc_x = self.src_pos_encoding(enc_x)
+    #     enc_x = self.dropout1(enc_x)
+
+    #     for layer in self.encoder_layers:
+    #         enc_x = layer(enc_x, src_padding_mask)
+
+    #     enc_x = self.norm1(enc_x)
+
+    #     return enc_x, src_padding_mask
+
+    # def decode(self, tgt_input_ids, enc_x, src_padding_mask):
+    #     tgt_padding_mask = get_padding_mask(tgt_input_ids, pad_token_id=0)
+
+    #     # 디코더 입력 처리
+    #     dec_x = self.tgt_embedding(tgt_input_ids) * math.sqrt(self.d_model)
+    #     dec_x = self.tgt_pos_encoding(dec_x)
+    #     dec_x = self.dropout2(dec_x)
+
+    #     for layer in self.decoder_layers:
+    #         dec_x = layer(dec_x, enc_x, tgt_padding_mask, src_padding_mask)
+
+    #     dec_x = self.norm2(dec_x)
+
+    #     # 최종 출력
+    #     logits = self.out_proj(dec_x)  # (B, T, vocab_size)
+    #     return logits
+
+    # def forward(self, src_input_ids, tgt_input_ids):
+    #     enc_out, src_pad_mask = self.encode(src_input_ids)
+    #     logits = self.decode(tgt_input_ids, enc_out, src_pad_mask)
+    #     return logits
+
     def forward(self, src_input_ids, tgt_input_ids):
         # 인코더 입력 마스크
         src_padding_mask = get_padding_mask(src_input_ids, pad_token_id=0)
@@ -112,5 +149,8 @@ if __name__ == "__main__":
     tgt_input_ids = torch.randint(0, 27000, (64, 40)).to(device)
 
     # 모델 실행
-    logits = model(src_input_ids, tgt_input_ids)
-    print(logits.shape)  # (64, 55, 27000)
+    enc_x, src_pad_mask = model.encode(src_input_ids)
+    logits = model.decode(tgt_input_ids, enc_x, src_pad_mask)
+
+    print(enc_x.shape)
+    print(logits.shape)  # (batch_size, seq_len, vocab_size)
